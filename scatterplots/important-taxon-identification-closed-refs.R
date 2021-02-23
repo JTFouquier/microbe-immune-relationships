@@ -15,6 +15,9 @@ library(ggforce)
 library(cowplot)
 library(tibble)
 library(dplyr)
+library(car)
+library(gridExtra)
+library(grid)
 
 setwd("~/lozupone_lab/microbe-immune-relationships/scatterplots")
 source("/Users/jenniferfouquier/lozupone_lab/rscripts/taxonomy-from-hash.R")
@@ -56,27 +59,26 @@ MetadataForLMEs = function(metadata){
 ### ORIGINAL ANALYSIS 
 metadata = metadata %>% filter(!is.na(Eubacterium.biforme.original))
 
-spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$'149818', method = "spearman", exact = FALSE)
-
-gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$CD4_plus_CCR5_plus.original, y = metadata$CD4pos.CCR5pos)) +
-  geom_point(aes(color = HIV_Status)) +
-  geom_smooth(method='lm', se = FALSE) +
-  theme_bw(base_size =9)
-print(gg)
-
-spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$CD4pos.CCR5pos, method = "spearman", exact = FALSE)
-gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$CD4_plus_CCR5_plus.original, y = metadata$CD4pos.CCR5pos)) +
-  geom_point(aes(color = HIV_Status)) +
-  geom_smooth(method='lm', se = FALSE) +
-  theme_bw(base_size =9)
-print(gg)
-
-spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$CD4pos.CCR5pos, method = "spearman", exact = FALSE)
-gg = ggplot(metadata, cor.coef = TRUE, aes(x = Eubacterium.biforme.original, y = metadata$`125219`)) +
-  geom_point(aes(color = HIV_Status)) +
-  geom_smooth(method='lm', se = FALSE) +
-  theme_bw(base_size =9)
-print(gg)
+# spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$'149818', method = "spearman", exact = FALSE)
+# gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$CD4_plus_CCR5_plus.original, y = metadata$CD4pos.CCR5pos)) +
+#   geom_point(aes(color = HIV_Status)) +
+#   geom_smooth(method='lm', se = FALSE) +
+#   theme_bw(base_size =9)
+# print(gg)
+# 
+# spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$CD4pos.CCR5pos, method = "spearman", exact = FALSE)
+# gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$CD4_plus_CCR5_plus.original, y = metadata$CD4pos.CCR5pos)) +
+#   geom_point(aes(color = HIV_Status)) +
+#   geom_smooth(method='lm', se = FALSE) +
+#   theme_bw(base_size =9)
+# print(gg)
+# 
+# spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$CD4pos.CCR5pos, method = "spearman", exact = FALSE)
+# gg = ggplot(metadata, cor.coef = TRUE, aes(x = Eubacterium.biforme.original, y = metadata$`125219`)) +
+#   geom_point(aes(color = HIV_Status)) +
+#   geom_smooth(method='lm', se = FALSE) +
+#   theme_bw(base_size =9)
+# print(gg)
 
 # save small sample file for comparison of original vs new data
 # SampleID = metadata$Biopsy_ID
@@ -114,7 +116,20 @@ PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
   
   metadata.long.format <- merge(metadata.long.format, greengenes_taxon,
                                 by.x = 'hash', by.y = 'Feature.ID')
-
+  
+  # make a function
+  
+  myRound = function(needs.rounding){
+    return(round(needs.rounding, 4))
+  }
+  
+  lme.df$text.string.stats = paste0("p=", myRound(lme.df$spear.ps), " q=", 
+                              myRound(lme.df$spearman.q.list), " rho=", 
+                              myRound(lme.df$rholist))
+  
+  # only add cols I need; not critical
+  metadata.long.format <- merge(metadata.long.format, lme.df,
+                                by.x = 'hash', by.y = 'important.taxa.list')
   metadata.long.format %>%
     separate(Taxon, into = c('Kingdom',
                              'Phylum',
@@ -124,14 +139,18 @@ PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
                              'Genus',
                              'Species'), sep = ';', remove = FALSE) -> metadata.long.format
   
+  metadata.long.format$taxonomy.text = paste(metadata.long.format$Family, 
+                                             metadata.long.format$Genus, 
+                                             metadata.long.format$Species)
+  
   gg = ggplot(metadata.long.format, cor.coef = TRUE, aes(x = TaxaAbundance, 
                                                          y = get(response.var))) +
-    geom_point(aes(color = HIV_Status)) +
-    geom_smooth(method='lm', se = FALSE) +
-    ylab(response.var)+
-    xlab("Relative Abundance")+
-    facet_wrap(hash~Genus+Species, scales = "free_x") +
-    theme_bw(base_size =9)
+    geom_point(aes(color = HIV_Status), size=2.5) +
+    geom_smooth(method='lm', se = FALSE, color="darkgrey") +
+    ylab("CD4+ CCR5+") +
+    xlab("Relative Abundance") +
+    facet_wrap(hash~taxonomy.text+text.string.stats, scales = "free_x") +
+    theme_bw(base_size =12)
     # scale_color_brewer(palette = 'Dark2')
 
   # plot.grid = plot_grid(gg, tableGrob(lme.df), nrow = 2)
@@ -161,13 +180,13 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
     }
     # spearman rank rho/r, so only using one time point
     spearman.cor.results <- cor.test(metadata[[taxon]], 
-                                     metadata$CD4pos.CCR5pos, 
+                                     metadata$CD4_plus_CCR5_plus.original, 
                                      method = "spearman", exact = FALSE, 
                                      na.action = "na.omit")
     spear.p =  spearman.cor.results$p.value
     spearman.rho =  spearman.cor.results$estimate
 
-    lm.results = summary(lm(CD4pos.CCR5pos ~ get(taxon)*HIV_Status, data = metadata))
+    lm.results = summary(lm(CD4_plus_CCR5_plus.original ~ get(taxon)*HIV_Status, data = metadata))
     lm.interact.p = lm.results$coefficients[,4][4][[1]]
 
     spear.ps = c(spear.ps, spear.p)
@@ -183,20 +202,17 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
   # p and FDR-adjusted q values
   lme.df = data.frame(important.taxa.list, spear.ps, spearman.q.list, rholist, 
                       lm.p.list, lm.q.list)
-  # lme.df = subset(lme.df, lm.q.list < 0.2)
-  lme.df = subset(lme.df, spear.ps < 0.4)
-  # lme.df = subset(lme.df, spear.ps > 0.3)
-  # lme.df = subset(lme.df, plist < 0.05)
+  lme.df = subset(lme.df, spearman.q.list < 0.1)
 
   return(lme.df)
 }
 
-response.var = "CD4pos.CCR5pos"
+response.var = "CD4_plus_CCR5_plus.original"
 # metadata.for.lmes = MetadataForLMEs(metadata)
 lme.df = AllTaxaLME(taxalist, metadata, full.model.string, 
                      reduced.model.string, pdf.name, response.var)
 
-write.csv(lme.df, "collapsed-taxa-pless0.2.csv")
+# write.csv(lme.df, "collapsed-taxa-pless0.2.csv")
 
 metadata.long.format = PlotTaxaLineGraphs(metadata, lme.df, response.var)
 # 
