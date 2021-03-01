@@ -143,19 +143,23 @@ PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
                                              metadata.long.format$Genus, 
                                              metadata.long.format$Species)
   
+  metadata.long.format$taxonomy.text[metadata.long.format$hash == 125219] = "Holdemanella biformis"
+  metadata.long.format$taxonomy.text[metadata.long.format$hash == 1133220] = "Mediterraneibacter faecis"
+  metadata.long.format$taxonomy.text[metadata.long.format$hash == 369058] = "Desulfovibrio piger"
+  metadata.long.format$taxonomy.text[metadata.long.format$hash == 469918] = "Catenibacterium mitsuokai"
+  
   gg = ggplot(metadata.long.format, cor.coef = TRUE, aes(x = TaxaAbundance, 
-                                                         y = get(response.var))) +
-    geom_point(aes(color = HIV_Status), size=2.5) +
+                                                         y = get(response.var), 
+                                                         color=HIV_Status)) +
+    geom_point(aes(color = HIV_Status), size=2.7) +
     geom_smooth(method='lm', se = FALSE, color="darkgrey") +
     ylab("CD4+ CCR5+") +
     xlab("Relative Abundance") +
     facet_wrap(hash~taxonomy.text+text.string.stats, scales = "free_x") +
-    theme_bw(base_size =12)
-    # scale_color_brewer(palette = 'Dark2')
+    theme_bw(base_size =12) +
+    scale_color_brewer(palette = 'Dark2')
 
-  # plot.grid = plot_grid(gg, tableGrob(lme.df), nrow = 2)
   print(gg)
-  # print(plot.grid)
   return(metadata.long.format)
 }
 
@@ -172,10 +176,12 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
   lm.q.list = c()
   lme.df = data.frame()
   
+  total.samples = length(metadata$SampleID)
+  
   # only look at organisms found in at least a certain number of samples
   for (taxon in taxalist){
     total.zeros = sum(metadata[[taxon]]==0, na.rm = TRUE)
-    if (total.zeros >= 15){
+    if (total.zeros >= total.samples/2){
       next
     }
     # spearman rank rho/r, so only using one time point
@@ -186,7 +192,8 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
     spear.p =  spearman.cor.results$p.value
     spearman.rho =  spearman.cor.results$estimate
 
-    lm.results = summary(lm(CD4_plus_CCR5_plus.original ~ get(taxon)*HIV_Status, data = metadata))
+    lm.results = summary(lm(CD4_plus_CCR5_plus.original ~ get(taxon)*HIV_Status, 
+                            data = metadata))
     lm.interact.p = lm.results$coefficients[,4][4][[1]]
 
     spear.ps = c(spear.ps, spear.p)
@@ -200,7 +207,8 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
   lm.q.list = p.adjust(lm.p.list, method = "fdr")
   # make a new dataframe that contains important taxa for this reln 
   # p and FDR-adjusted q values
-  lme.df = data.frame(important.taxa.list, spear.ps, spearman.q.list, rholist, 
+  lme.df = data.frame(important.taxa.list, 
+                      spear.ps, spearman.q.list, rholist, 
                       lm.p.list, lm.q.list)
   lme.df = subset(lme.df, spearman.q.list < 0.1)
 
@@ -208,15 +216,7 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
 }
 
 response.var = "CD4_plus_CCR5_plus.original"
-# metadata.for.lmes = MetadataForLMEs(metadata)
 lme.df = AllTaxaLME(taxalist, metadata, full.model.string, 
                      reduced.model.string, pdf.name, response.var)
 
-# write.csv(lme.df, "collapsed-taxa-pless0.2.csv")
-
 metadata.long.format = PlotTaxaLineGraphs(metadata, lme.df, response.var)
-# 
-# 
-# plot_grid(gg, gg, 
-#           rel_heights = c(1, 0.4),
-#           ncol = 1)

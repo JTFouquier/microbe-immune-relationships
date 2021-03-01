@@ -31,7 +31,6 @@ LoadQIIMERepSeq = function(repseqs.transposed) {
   df = read.csv(repseqs.transposed, sep = "\t", header = FALSE,  stringsAsFactors=FALSE)
   colnames(df) = df[2,] # fix colnames
   df <- df[-c(1,2), ] # remove rows and keep all columns
-  # colnames(df)[1] = "SampleID" 
   df[,2:length(colnames(df))] <- lapply(df[,2:length(colnames(df))], 
                                         function(x) (as.numeric(as.character(x) )))
   return(df)
@@ -48,40 +47,29 @@ metadata = merge(x=metadata, y=cytof.data, by.x='SampleID', by.y='SampleID', all
 metadata = merge(x=metadata, y=taxa, by.x='SampleID', by.y='SampleID', all = TRUE)
 metadata = merge(x=metadata, y=original.analysis, by.x="Biopsy_ID", by.y = "Biopsy_ID", all = TRUE)
 
-# print(length(metadata$SampleID)) # before removing non MSM HIV Negative
-# metadata = metadata[grepl("MSM", metadata[["MSM_MSW"]]) | grepl("Positive", metadata['HIV_Status']),]
-# print(length(metadata$SampleID)) # after removing non MSM HIV Negative
-
-
 MetadataForLMEs = function(metadata){
   # make function for making linear mixed effects models make sense
   metadata$HIV_Status[metadata$HIV_Status == "Negative"] <- ".Negative"
   return(metadata)
 }
 
-
-
 ### ORIGINAL ANALYSIS
 metadata = metadata %>% filter(!is.na(Eubacterium.biforme.original))
 
-spearman.cor.results <- cor.test(metadata$`35119c7a1bef820619b6f3c4c9a9f172`, 
-                                 metadata$CD4pos.CCR5pos, method = "spearman", 
-                                 exact = FALSE, na.action = "na.omit")
-
-gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$`35119c7a1bef820619b6f3c4c9a9f172`, y = CD4pos.CCR5pos)) +
-  geom_point(aes(color = HIV_Status)) +
-  geom_smooth(method='lm', se = FALSE) +
-  theme_bw(base_size =9)
-
-print(gg)
-
-# metadata = metadata %>% filter(`35119c7a1bef820619b6f3c4c9a9f172` < .1)
-# metadata = metadata %>% filter(HIV_Status == "Positive" | MSM_MSW == "MSM")
+# spearman.cor.results <- cor.test(metadata$`35119c7a1bef820619b6f3c4c9a9f172`, 
+#                                  metadata$CD4pos.CCR5pos, method = "spearman", 
+#                                  exact = FALSE, na.action = "na.omit")
+# 
+# gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$`35119c7a1bef820619b6f3c4c9a9f172`, y = CD4pos.CCR5pos)) +
+#   geom_point(aes(color = HIV_Status)) +
+#   geom_smooth(method='lm', se = FALSE) +
+#   theme_bw(base_size =9)
+# 
+# print(gg)
 
 PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
   
   print(metadata$SampleID)
-  # taxa < 0.2 q-values from FDR adjustment
   important.taxa.list = c(lme.df$important.taxa.list)
   
   # Other required columns
@@ -120,7 +108,6 @@ PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
     theme_bw(base_size =9)
     # scale_color_brewer(palette = 'Dark2')
 
-  # plot.grid = plot_grid(gg, tableGrob(lme.df), nrow = 2)
   print(gg)
   # print(plot.grid)
   return(metadata.long.format)
@@ -145,14 +132,7 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
                                      method = "spearman", exact = FALSE)
     spear.p =  spearman.cor.results$p.value
     spearman.rho =  spearman.cor.results$estimate
-    
-    if (spear.p <= 0.4 | spear.p >= 0.1){
-      print(taxon)
-      print(spearman.cor.results)
-      print(spear.p)
-    }
-    
-    # working
+
     lm.results = summary(lm(CD4pos.CCR5pos ~ get(taxon)*HIV_Status, 
                             data = metadata))
     lm.interact.p = lm.results$coefficients[,4][4][[1]]
@@ -166,27 +146,19 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
   
   spearman.q.list = p.adjust(spear.ps, method = "fdr") 
   lm.q.list = p.adjust(lm.p.list, method = "fdr")
-  # make a new dataframe that contains important taxa for this reln 
   # p and FDR-adjusted q values
   lme.df = data.frame(important.taxa.list, spear.ps, spearman.q.list, rholist, 
                       lm.p.list, lm.q.list)
 
-  lme.df = subset(lme.df, spear.ps < 0.1)
+  lme.df = subset(lme.df, spearman.q.list < 0.05)
 
   return(lme.df)
 }
 
 response.var = "CD4pos.CCR5pos"
-
-# metadata.for.lmes = MetadataForLMEs(metadata)
 lme.df = AllTaxaLME(taxalist, metadata, full.model.string, 
                      reduced.model.string, pdf.name, response.var)
 
-write.csv(lme.df, "collapsed-taxa-pless0.2.csv")
+# write.csv(lme.df, "collapsed-taxa-pless0.2.csv")
 
 metadata.long.format = PlotTaxaLineGraphs(metadata, lme.df, response.var)
-# 
-# 
-# plot_grid(gg, gg, 
-#           rel_heights = c(1, 0.4),
-#           ncol = 1)
