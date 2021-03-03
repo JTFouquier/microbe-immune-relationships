@@ -157,7 +157,7 @@ PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
     xlab("Relative Abundance") +
     facet_wrap(hash~taxonomy.text+text.string.stats, scales = "free_x") +
     theme_bw(base_size =12) +
-    scale_color_brewer(palette = 'Dark2')
+    scale_color_manual(values=c("red", "blue"))
 
   print(gg)
   return(metadata.long.format)
