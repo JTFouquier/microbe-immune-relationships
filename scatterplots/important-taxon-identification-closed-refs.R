@@ -18,36 +18,23 @@ library(dplyr)
 library(car)
 library(gridExtra)
 library(grid)
+library(tidyverse)
 
 setwd("~/lozupone_lab/microbe-immune-relationships/scatterplots")
 source("/Users/jenniferfouquier/lozupone_lab/rscripts/taxonomy-from-hash.R")
 
 metadata = read.csv("~/lozupone_lab/microbe-immune-relationships/input-data/biopsy-input-renamed-for-filtering.txt", sep = "\t")
 cytof.data = read.csv("~/lozupone_lab/microbe-immune-relationships/input-data/CD4CCRX5-time1.txt", sep = "\t")
-greengenes_taxon <- read.csv("taxonomy-gg-closed-refs.tsv", sep = '\t')
-de.novo.seqs.97 = "clustered-0.97-closed-ref-relative-freqs-transposed.tsv"
+# greengenes_taxon <- read.csv("taxonomy-gg-closed-refs.tsv", sep = '\t')
+
+greengenes_taxon <- read_qza("~/lozupone_lab/microbe-immune-relationships/microbial-analysis/merged-tables/closed-ref-2/closed-ref2-taxonomy.qza")$data
+
+# de.novo.seqs.97 = "clustered-0.97-closed-ref-relative-freqs-transposed.tsv"
 original.analysis = read.csv("~/lozupone_lab/microbe-immune-relationships/input-data/original-analysis-eiko.txt", sep = "\t")
 
+taxa <- as.data.frame(t(read_qza("~/lozupone_lab/microbe-immune-relationships/microbial-analysis/merged-tables/closed-ref-2/relative-filtered-features.qza")$data)) %>% rownames_to_column("SampleID")
 
-LoadQIIMERepSeq = function(repseqs.transposed) {
-  df = read.csv(repseqs.transposed, sep = "\t", header = FALSE,  stringsAsFactors=FALSE)
-  colnames(df) = df[2,] # fix colnames
-  df <- df[-c(1,2), ] # remove rows and keep all columns
-  # colnames(df)[1] = "SampleID" 
-  df[,2:length(colnames(df))] <- lapply(df[,2:length(colnames(df))], 
-                                        function(x) (as.numeric(as.character(x) )))
-  return(df)
-}
-
-
-transposed.feature.table = LoadQIIMERepSeq(de.novo.seqs.97)
-
-taxa = transposed.feature.table
-taxa.colnames = colnames(taxa)
-taxalist = taxa.colnames[c(2:length(taxa.colnames))]
-
-metadata = merge(x=metadata, y=cytof.data, by.x='SampleID', by.y='SampleID', all = TRUE)
-metadata = merge(x=metadata, y=taxa, by.x='SampleID', by.y='SampleID', all = TRUE)
+# metadata = merge(x=metadata, y=cytof.data, by.x='SampleID', by.y='SampleID', all = TRUE)
 metadata = merge(x=metadata, y=original.analysis, by.x="Biopsy_ID", by.y = "Biopsy_ID", all = TRUE)
 
 MetadataForLMEs = function(metadata){
@@ -59,41 +46,18 @@ MetadataForLMEs = function(metadata){
 ### ORIGINAL ANALYSIS 
 metadata = metadata %>% filter(!is.na(Eubacterium.biforme.original))
 
-# spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$'149818', method = "spearman", exact = FALSE)
-# gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$CD4_plus_CCR5_plus.original, y = metadata$CD4pos.CCR5pos)) +
-#   geom_point(aes(color = HIV_Status)) +
-#   geom_smooth(method='lm', se = FALSE) +
-#   theme_bw(base_size =9)
-# print(gg)
-# 
-# spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$CD4pos.CCR5pos, method = "spearman", exact = FALSE)
-# gg = ggplot(metadata, cor.coef = TRUE, aes(x = metadata$CD4_plus_CCR5_plus.original, y = metadata$CD4pos.CCR5pos)) +
-#   geom_point(aes(color = HIV_Status)) +
-#   geom_smooth(method='lm', se = FALSE) +
-#   theme_bw(base_size =9)
-# print(gg)
-# 
-# spearman.cor.results <- cor.test(metadata$CD4_plus_CCR5_plus.original, metadata$CD4pos.CCR5pos, method = "spearman", exact = FALSE)
-# gg = ggplot(metadata, cor.coef = TRUE, aes(x = Eubacterium.biforme.original, y = metadata$`125219`)) +
-#   geom_point(aes(color = HIV_Status)) +
-#   geom_smooth(method='lm', se = FALSE) +
-#   theme_bw(base_size =9)
-# print(gg)
+# this is funky, remove sampleID and add it back to remove cols with all 0s
+taxa.samples = metadata$SampleID
+taxa %>%
+  filter(SampleID %in% taxa.samples) -> taxa
 
-# save small sample file for comparison of original vs new data
-# SampleID = metadata$Biopsy_ID
-# CD4posCCR5pos.original = metadata$CD4_plus_CCR5_plus.original
-# CD4posCCR5pos.new = metadata$CD4pos.CCR5pos
-# delta.CD4posCCR5pos = CD4posCCR5pos.new - CD4posCCR5pos.original
-# Eubacterium.biforme.original = metadata$Eubacterium.biforme.original
-# Eubacterium.biforme.new = metadata$`35119c7a1bef820619b6f3c4c9a9f172`
-# delta.Eubacterium.biforme = Eubacterium.biforme.original - Eubacterium.biforme.new
-# 
-# metadata.comparison = data.frame(SampleID, CD4posCCR5pos.original,
-#                                  CD4posCCR5pos.new, delta.CD4posCCR5pos, 
-#                                  Eubacterium.biforme.original, 
-#                                  Eubacterium.biforme.new, 
-#                                  delta.Eubacterium.biforme)
+taxa.samples = taxa$SampleID # store sample col after filtering
+taxa <- taxa %>% select(-SampleID) # remove col
+taxa <- taxa %>% select(which(!colSums(taxa, na.rm=TRUE) %in% 0)) # keep whne
+taxalist = colnames(taxa)
+taxa$SampleID = taxa.samples # add col back
+
+metadata = merge(x=metadata, y=taxa, by.x='SampleID', by.y='SampleID', all = TRUE)
 
 PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
   
@@ -184,11 +148,12 @@ AllTaxaLME = function(taxalist, metadata, full.model.string,
     if (total.zeros >= total.samples/2){
       next
     }
+
     # spearman rank rho/r, so only using one time point
     spearman.cor.results <- cor.test(metadata[[taxon]], 
                                      metadata$CD4_plus_CCR5_plus.original, 
                                      method = "spearman", exact = FALSE, 
-                                     na.action = "na.omit")
+                                     na.action = "na.omit", alternative = "greater")
     spear.p =  spearman.cor.results$p.value
     spearman.rho =  spearman.cor.results$estimate
 
