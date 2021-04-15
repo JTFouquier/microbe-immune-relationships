@@ -19,6 +19,7 @@ library(car)
 library(gridExtra)
 library(grid)
 library(tidyverse)
+library(qiime2R)
 
 setwd("~/lozupone_lab/microbe-immune-relationships/scatterplots")
 source("/Users/jenniferfouquier/lozupone_lab/rscripts/taxonomy-from-hash.R")
@@ -36,6 +37,7 @@ taxa <- as.data.frame(t(read_qza("~/lozupone_lab/microbe-immune-relationships/mi
 
 # metadata = merge(x=metadata, y=cytof.data, by.x='SampleID', by.y='SampleID', all = TRUE)
 metadata = merge(x=metadata, y=original.analysis, by.x="Biopsy_ID", by.y = "Biopsy_ID", all = TRUE)
+
 
 MetadataForLMEs = function(metadata){
   # make function for making linear mixed effects models make sense
@@ -84,7 +86,7 @@ PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
   # make a function
   
   myRound = function(needs.rounding){
-    return(round(needs.rounding, 4))
+    return(round(needs.rounding, 3))
   }
   
   lme.df$text.string.stats = paste0("p=", myRound(lme.df$spear.ps), " q=", 
@@ -111,15 +113,15 @@ PlotTaxaLineGraphs <- function(metadata, lme.df, response.var){
   metadata.long.format$taxonomy.text[metadata.long.format$hash == 1133220] = "Mediterraneibacter faecis"
   metadata.long.format$taxonomy.text[metadata.long.format$hash == 369058] = "Desulfovibrio piger"
   metadata.long.format$taxonomy.text[metadata.long.format$hash == 469918] = "Catenibacterium mitsuokai"
-  
+  # 
   gg = ggplot(metadata.long.format, cor.coef = TRUE, aes(x = TaxaAbundance, 
                                                          y = get(response.var), 
                                                          color=HIV_Status)) +
     geom_point(aes(color = HIV_Status), size=2.7) +
     geom_smooth(method='lm', se = FALSE, color="darkgrey") +
-    ylab("CD4+ CCR5+") +
+    ylab("CD4+ CCR5+ %") +
     xlab("Relative Abundance") +
-    facet_wrap(hash~taxonomy.text+text.string.stats, scales = "free_x") +
+    facet_wrap(hash~taxonomy.text+text.string.stats, scales = "free_x", nrow=3) +
     theme_bw(base_size =12) +
     scale_color_manual(values=c("red", "blue"))
 
